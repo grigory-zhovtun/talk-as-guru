@@ -2,12 +2,12 @@
 
 CLI utility for analyzing CLAUDE.md files and generating structured prompts for Claude Code.
 
-Guru reads your project's CLAUDE.md file and uses it to generate context-aware prompts that include role detection, relevant context filtering, tech stack, coding conventions, and project constraints.
+Guru reads your project's CLAUDE.md file and uses Claude Code CLI to generate context-aware, AI-enriched prompts with role detection, task decomposition, relevant context filtering, and technical constraints.
 
 ## Installation
 
 ```bash
-# From PyPI (when published)
+# From PyPI
 pip install talk-as-guru
 
 # From source
@@ -15,6 +15,10 @@ git clone https://github.com/grigory-zhovtun/talk-as-guru.git
 cd talk-as-guru
 pip install -e .
 ```
+
+## Prerequisites
+
+Guru uses [Claude Code CLI](https://claude.ai/code) to generate prompts. Make sure the `claude` command is available in your PATH.
 
 ## Quick Start
 
@@ -42,75 +46,67 @@ pip install -e .
 guru "create a REST API endpoint for user authentication"
 ```
 
-3. Result — a structured prompt in `./prompts/prompt_01.md`:
+3. Result — an AI-enriched structured prompt saved to `./prompts/prompt_01.md`:
 
 ```markdown
-# Роль
-Senior Backend разработчик (FastAPI, Python, PostgreSQL)
+# Enriched Prompt
 
-# Задача
-create a REST API endpoint for user authentication
+## Role
+Senior Python/FastAPI developer specializing in async API
+and authentication systems with SQLAlchemy and PostgreSQL experience.
 
-# Техническое окружение
-- Python 3.11
-- FastAPI
-- PostgreSQL
+## Task
+Implement a REST API endpoint for user authentication
+with JWT token support.
 
-# Релевантный контекст
-[Only relevant sections from CLAUDE.md]
+## Subtasks
+1. Analyze existing auth models and endpoints
+2. Define Pydantic response schemas
+3. Implement POST /api/auth/login endpoint
+4. Add input validation
+5. Write unit tests
 
-# Конвенции
-- Use type hints everywhere
-- Follow PEP 8 style guide
+## Relevant Context
+- Backend: FastAPI + SQLAlchemy async + PostgreSQL
+- Existing files: routes/auth.py, db/models/user.py
 
-# Ограничения и правила
-- Never commit secrets
-- Always write tests for new features
+## Constraints
+- Use async/await for all DB operations
+- Validate all user input
+- Never hardcode secrets
 ```
 
-## Two Modes
+## How It Works
 
-### Standard Mode (default)
+Guru sends your query along with the parsed CLAUDE.md content to Claude Code CLI, which analyzes the task and generates a structured prompt with:
 
-Generates a prompt locally using a template with:
-- **Automatic role detection** — determines the role from query keywords and tech stack (e.g. "Senior Frontend разработчик (Next.js, React, TypeScript)")
-- **Relevant context filtering** — includes only project-specific sections from CLAUDE.md, sorted by relevance to the query
-- **Structured output** — role, task, tech environment, context, conventions, constraints
-
-```bash
-guru "add a notification bell to the header"
-```
-
-### Smart Mode (`--smart`)
-
-Uses Claude Code CLI to analyze the query and generate an enriched prompt with:
 - **AI-powered role selection** — specific specialization for the task
 - **Task decomposition** — 3-7 concrete subtasks with details
 - **Intelligent context filtering** — only the most relevant parts of CLAUDE.md
 - **Technical constraints** — derived from project architecture
 
-```bash
-guru --smart "add a notification bell to the header"
-```
-
-Requires Claude Code CLI installed (`claude` command in PATH).
+If Claude Code CLI is unavailable, Guru falls back to a local template-based mode with automatic role detection and keyword-based context filtering.
 
 ## Usage
 
-### Interactive REPL Mode
+### Single Query Mode
 
-Start the interactive shell:
+```bash
+guru "create a function for email validation"
+```
+
+### Interactive REPL Mode
 
 ```bash
 guru
 ```
 
-### Single Query Mode
+### Disable AI Enrichment
 
-Process a query without entering the REPL:
+Use `--no-smart` to generate prompts using local templates only (no Claude Code CLI):
 
 ```bash
-guru "create a function for email validation"
+guru --no-smart "create a function for email validation"
 ```
 
 ### Command Line Options
@@ -118,7 +114,7 @@ guru "create a function for email validation"
 ```
 guru --help                    Show help
 guru --version                 Show version
-guru --smart / -s              Enrich prompt via Claude Code AI
+guru --no-smart / -S           Use local template instead of Claude Code AI
 guru -c /path/to/CLAUDE.md     Use specific CLAUDE.md file
 guru -p ./my-prompts           Save prompts to custom directory
 guru -t custom                 Use a custom template
@@ -134,7 +130,6 @@ guru --profile my-project      Load a saved profile
 | `/template [name]` | Switch template (no arg = list available) |
 | `/profile [name]` | Load profile (no arg = list available) |
 | `/run` | Send last prompt to Claude Code CLI |
-| `/smart [query]` | Enrich prompt via Claude Code AI |
 | `/help` | Show help |
 | `/exit` | Exit Guru |
 
@@ -149,17 +144,9 @@ prompts/
 └── prompt_03.md
 ```
 
-Each prompt includes:
-- Automatically detected role
-- Your query/task
-- Tech stack from CLAUDE.md
-- Relevant project context (filtered, not full dump)
-- Project conventions
-- Constraints and rules
-
 ## Templates
 
-Guru uses Jinja2 templates for prompt generation.
+Guru uses Jinja2 templates for the local fallback mode.
 
 ### Available Template Variables
 
@@ -171,7 +158,6 @@ Guru uses Jinja2 templates for prompt generation.
 | `relevant_context` | Filtered relevant sections |
 | `conventions` | Conventions section |
 | `constraints` | Constraints/rules section |
-| `context` | Full file content (legacy) |
 
 ### Custom Templates
 
@@ -232,44 +218,6 @@ guru --profile my-project
 guru> /profile my-project
 ```
 
-## Claude Code Integration
-
-### `/run` — Execute prompt
-
-Send the last generated prompt to Claude Code CLI:
-
-```
-guru> create a user model
-Saved: ./prompts/prompt_01.md
-
-guru> /run
-Sending to Claude Code...
-[Claude's response appears here]
-```
-
-### `/smart` — AI-enriched prompts
-
-Re-generate the last query with AI analysis:
-
-```
-guru> add notifications to the header
-Saved: ./prompts/prompt_01.md
-
-guru> /smart
-Smart mode: enriching prompt via Claude Code...
-Saved (smart): ./prompts/prompt_02.md
-```
-
-Or provide a new query directly:
-
-```
-guru> /smart add API endpoint for notifications
-```
-
-Requirements:
-- Claude Code CLI must be installed and in your PATH
-- Install from: https://claude.ai/code
-
 ## CLAUDE.md Format
 
 Guru recognizes sections based on keywords in headings:
@@ -290,22 +238,6 @@ Supported heading formats:
 **Heading**
 ```
 
-## Role Detection
-
-Guru automatically detects the appropriate role based on query keywords and tech stack:
-
-| Keywords | Role |
-|----------|------|
-| react, next.js, frontend, css, ui, компонент | Senior Frontend разработчик |
-| python, fastapi, backend, api, endpoint | Senior Backend разработчик |
-| sql, postgres, database, модел | Senior Database разработчик |
-| docker, kubernetes, deploy, devops | Senior DevOps инженер |
-| test, pytest, jest, e2e | Senior QA инженер |
-| security, auth, jwt, oauth | Senior Security инженер |
-| go, golang, goroutine | Senior Go разработчик |
-
-The role is enhanced with specific technologies from the project's tech stack (e.g. "Senior Frontend разработчик (Next.js, React, TypeScript)").
-
 ## Examples
 
 ### Basic Workflow
@@ -314,13 +246,13 @@ The role is enhanced with specific technologies from the project's tech stack (e
 # Navigate to your project
 cd my-project
 
-# Generate a prompt
+# Generate an AI-enriched prompt (default)
 guru "implement user authentication with JWT"
 # Saved: ./prompts/prompt_01.md
 
-# Generate an AI-enriched prompt
-guru --smart "add rate limiting to the API"
-# Saved (smart): ./prompts/prompt_02.md
+# Generate a local template prompt (no AI)
+guru --no-smart "add rate limiting to the API"
+# Saved: ./prompts/prompt_02.md
 ```
 
 ### REPL Workflow
@@ -329,11 +261,8 @@ guru --smart "add rate limiting to the API"
 guru
 
 guru> implement user authentication with JWT
+Generating prompt via Claude Code...
 Saved: ./prompts/prompt_01.md
-
-guru> /smart
-Smart mode: enriching prompt via Claude Code...
-Saved (smart): ./prompts/prompt_02.md
 
 guru> /run
 Sending to Claude Code...
