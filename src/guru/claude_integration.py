@@ -155,7 +155,7 @@ ENRICH_SYSTEM_PROMPT = """Ты — эксперт по созданию стру
 def enrich_prompt(
     user_query: str,
     claude_md_content: str,
-    timeout: int = 120,
+    timeout: int = 300,
 ) -> ClaudeResult:
     """
     Use Claude Code CLI to enrich a user query into a structured prompt.

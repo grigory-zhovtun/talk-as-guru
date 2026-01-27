@@ -68,10 +68,10 @@ def main(
         help="Load a saved profile.",
     ),
     smart: bool = typer.Option(
-        False,
-        "--smart",
-        "-s",
-        help="Use Claude Code CLI to enrich the prompt with AI analysis.",
+        True,
+        "--smart/--no-smart",
+        "-s/-S",
+        help="Use Claude Code CLI to enrich the prompt (enabled by default).",
     ),
     version: bool = typer.Option(
         None,

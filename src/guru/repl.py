@@ -163,14 +163,40 @@ class GuruREPL:
             self.console.print("[dim]Type /help for available commands[/dim]")
 
     def _process_query(self, query: str) -> None:
-        """Process a user query and generate a prompt."""
+        """Process a user query using smart mode (Claude API) by default."""
         # Add to history
         self.history.append(query)
         self.last_query = query
         if len(self.history) > 100:  # Keep last 100 queries
             self.history = self.history[-100:]
 
-        # Build and save prompt with relevant context filtering
+        # Use smart mode by default
+        if check_claude_available():
+            self.console.print("[blue]Generating prompt via Claude Code...[/blue]")
+            try:
+                with self.console.status("[blue]Analyzing query...[/blue]", spinner="dots"):
+                    result = enrich_prompt(query, self.parser.extract_context())
+
+                if result.success and result.output:
+                    ensure_directory(self.prompts_dir)
+                    number = get_next_prompt_number(self.prompts_dir)
+                    filename = f"prompt_{number:02d}.md"
+                    filepath = self.prompts_dir / filename
+                    filepath.write_text(result.output, encoding="utf-8")
+
+                    self.last_prompt_content = result.output
+                    self.last_prompt_path = filepath
+
+                    self.console.print(f"[green]Saved:[/green] {filepath}")
+                    return
+                else:
+                    self.console.print(f"[yellow]Smart mode failed:[/yellow] {result.error}")
+                    self.console.print("[dim]Falling back to local template...[/dim]")
+            except Exception as e:
+                self.console.print(f"[yellow]Smart mode error:[/yellow] {e}")
+                self.console.print("[dim]Falling back to local template...[/dim]")
+
+        # Fallback: local template
         try:
             claude_md_data = self.parser.get_all_sections()
             claude_md_data["relevant_context"] = self.parser.get_relevant_sections(query)
