@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "CLI utility for analyzing CLAUDE.md files and generating structured prompts for Claude Code"
 readme = "README.md"
 requires-python = ">=3.9"
-license = {text = "MIT"}
+license = "MIT"
 authors = [
     {name = "Grigorii Zhovtun"}
 ]
@@ -16,7 +16,6 @@ keywords = ["cli", "claude", "ai", "prompts", "code-assistant"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
