@@ -6,6 +6,7 @@ Extracts structured sections from CLAUDE.md files including:
 - Conventions
 - Constraints/rules
 - General context
+- Relevance-filtered context for specific queries
 """
 
 import re
@@ -41,6 +42,7 @@ class ClaudeMarkdownParser:
         self.filepath = filepath
         self._content: Optional[str] = None
         self._sections: Dict[str, str] = {}
+        self._all_sections: List[Tuple[str, str]] = []  # All (title, content) pairs
         self._file_size: int = 0
 
     def load(self, filepath: Optional[Path] = None) -> "ClaudeMarkdownParser":
@@ -97,9 +99,9 @@ class ClaudeMarkdownParser:
             return
 
         self._sections = {}
-        sections = self._split_into_sections(self._content)
+        self._all_sections = self._split_into_sections(self._content)
 
-        for title, content in sections:
+        for title, content in self._all_sections:
             section_type = self._classify_section(title)
             if section_type:
                 if section_type in self._sections:
@@ -182,39 +184,19 @@ class ClaudeMarkdownParser:
         return None
 
     def extract_tech_stack(self) -> str:
-        """
-        Extract the tech stack section.
-
-        Returns:
-            Tech stack content or empty string if not found
-        """
+        """Extract the tech stack section."""
         return self._sections.get("tech_stack", "")
 
     def extract_conventions(self) -> str:
-        """
-        Extract the conventions section.
-
-        Returns:
-            Conventions content or empty string if not found
-        """
+        """Extract the conventions section."""
         return self._sections.get("conventions", "")
 
     def extract_constraints(self) -> str:
-        """
-        Extract the constraints/rules section.
-
-        Returns:
-            Constraints content or empty string if not found
-        """
+        """Extract the constraints/rules section."""
         return self._sections.get("constraints", "")
 
     def extract_context(self) -> str:
-        """
-        Extract the full context (entire file content).
-
-        Returns:
-            Full file content
-        """
+        """Extract the full context (entire file content)."""
         return self._content or ""
 
     def get_all_sections(self) -> Dict[str, str]:
@@ -230,6 +212,85 @@ class ClaudeMarkdownParser:
             "constraints": self.extract_constraints(),
             "context": self.extract_context(),
         }
+
+    def get_relevant_sections(self, query: str) -> str:
+        """
+        Get sections relevant to the user's query.
+
+        Filters sections by matching query keywords against section titles and content.
+        Returns only unclassified sections (not tech_stack/conventions/constraints),
+        sorted by relevance to the query. This avoids dumping the entire file.
+
+        Args:
+            query: User's query string
+
+        Returns:
+            Filtered context string with only relevant sections
+        """
+        if not self._all_sections:
+            return self._content or ""
+
+        query_lower = query.lower()
+        query_words = set(re.findall(r'[a-zA-Zа-яА-ЯёЁ]{3,}', query_lower))
+
+        # Collect all unclassified sections (project-specific context)
+        unclassified: List[Tuple[float, str, str]] = []
+
+        for title, content in self._all_sections:
+            section_type = self._classify_section(title)
+            if section_type in ("tech_stack", "conventions", "constraints"):
+                continue
+
+            score = self._relevance_score(title, content, query_lower, query_words)
+            unclassified.append((score, title, content))
+
+        if not unclassified:
+            return ""
+
+        # Sort by relevance score descending (highest relevance first)
+        unclassified.sort(key=lambda x: x[0], reverse=True)
+
+        # Include sections with score > 0 first, then remaining sections
+        # This ensures relevant sections are at the top
+        parts = []
+        for _score, title, content in unclassified:
+            parts.append(f"## {title}\n{content}")
+
+        return "\n\n".join(parts)
+
+    def _relevance_score(
+        self, title: str, content: str, query_lower: str, query_words: set
+    ) -> float:
+        """
+        Calculate relevance score of a section to the query.
+
+        Args:
+            title: Section title
+            content: Section content
+            query_lower: Lowercased query string
+            query_words: Set of query words (3+ chars)
+
+        Returns:
+            Relevance score (0 = not relevant)
+        """
+        title_lower = title.lower()
+        content_lower = content.lower()
+        combined = title_lower + " " + content_lower
+
+        score = 0.0
+
+        # Title matches are worth more
+        for word in query_words:
+            if word in title_lower:
+                score += 3.0
+            if word in content_lower:
+                score += 1.0
+
+        # Check for multi-word phrase matches in title
+        if len(query_lower) > 5 and query_lower in combined:
+            score += 5.0
+
+        return score
 
     def get_summary(self) -> Dict[str, any]:
         """

@@ -16,6 +16,7 @@ from .prompt_builder import PromptBuilder
 from .config import ConfigManager
 from .repl import GuruREPL
 from .utils import find_claude_md, format_file_size
+from .claude_integration import check_claude_available, enrich_prompt
 
 # Create Typer app
 app = typer.Typer(
@@ -65,6 +66,12 @@ def main(
         None,
         "--profile",
         help="Load a saved profile.",
+    ),
+    smart: bool = typer.Option(
+        False,
+        "--smart",
+        "-s",
+        help="Use Claude Code CLI to enrich the prompt with AI analysis.",
     ),
     version: bool = typer.Option(
         None,
@@ -138,7 +145,7 @@ def main(
 
     # Single query mode
     if query:
-        _process_single_query(query, parser, builder, prompts_dir)
+        _process_single_query(query, parser, builder, prompts_dir, smart)
         return
 
     # Start REPL
@@ -197,17 +204,58 @@ def _process_single_query(
     parser: ClaudeMarkdownParser,
     builder: PromptBuilder,
     prompts_dir: Path,
+    smart: bool = False,
 ) -> None:
     """Process a single query without starting the REPL."""
     try:
-        claude_md_data = parser.get_all_sections()
-        content, filepath = builder.build_and_save(query, claude_md_data, prompts_dir)
+        if smart:
+            # Smart mode: use Claude Code CLI to enrich the prompt
+            if not check_claude_available():
+                console.print("[red]Error:[/red] Claude Code CLI not found for --smart mode.")
+                console.print("[dim]Install from: https://claude.ai/code[/dim]")
+                console.print("[dim]Falling back to standard mode...[/dim]")
+                _process_standard_query(query, parser, builder, prompts_dir)
+                return
 
-        console.print(f"[green]Saved:[/green] {filepath}")
+            console.print("[blue]Smart mode: enriching prompt via Claude Code...[/blue]")
+
+            with console.status("[blue]Analyzing query...[/blue]", spinner="dots"):
+                result = enrich_prompt(query, parser.extract_context())
+
+            if result.success and result.output:
+                # Save the enriched prompt
+                from .utils import ensure_directory, get_next_prompt_number
+                ensure_directory(prompts_dir)
+                number = get_next_prompt_number(prompts_dir)
+                filename = f"prompt_{number:02d}.md"
+                filepath = prompts_dir / filename
+                filepath.write_text(result.output, encoding="utf-8")
+
+                console.print(f"[green]Saved (smart):[/green] {filepath}")
+            else:
+                console.print(f"[yellow]Smart mode failed:[/yellow] {result.error}")
+                console.print("[dim]Falling back to standard mode...[/dim]")
+                _process_standard_query(query, parser, builder, prompts_dir)
+        else:
+            _process_standard_query(query, parser, builder, prompts_dir)
 
     except Exception as e:
         console.print(f"[red]Error:[/red] {e}")
         raise typer.Exit(1)
+
+
+def _process_standard_query(
+    query: str,
+    parser: ClaudeMarkdownParser,
+    builder: PromptBuilder,
+    prompts_dir: Path,
+) -> None:
+    """Process a query using the standard template-based approach."""
+    claude_md_data = parser.get_all_sections()
+    # Replace full context dump with relevant sections only
+    claude_md_data["relevant_context"] = parser.get_relevant_sections(query)
+    content, filepath = builder.build_and_save(query, claude_md_data, prompts_dir)
+    console.print(f"[green]Saved:[/green] {filepath}")
 
 
 def run() -> None:

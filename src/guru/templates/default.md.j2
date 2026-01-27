@@ -1,22 +1,27 @@
+{% if role %}
+# Роль
+{{ role }}
+{% endif %}
+
 # Задача
 {{ user_query }}
 
 {% if tech_stack %}
-# Стек технологий
+# Техническое окружение
 {{ tech_stack }}
 {% endif %}
 
+{% if relevant_context %}
+# Релевантный контекст
+{{ relevant_context }}
+{% endif %}
+
 {% if conventions %}
-# Конвенции проекта
+# Конвенции
 {{ conventions }}
 {% endif %}
 
 {% if constraints %}
 # Ограничения и правила
 {{ constraints }}
-{% endif %}
-
-{% if context %}
-# Контекст проекта
-{{ context }}
 {% endif %}

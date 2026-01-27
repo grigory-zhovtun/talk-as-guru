@@ -136,3 +136,63 @@ def run_claude_interactive(prompt: str) -> ClaudeResult:
             error=str(e),
             return_code=-1,
         )
+
+
+ENRICH_SYSTEM_PROMPT = """Ты — эксперт по созданию структурированных промптов для AI-ассистентов разработки.
+
+Тебе дан запрос пользователя и контекст проекта из CLAUDE.md.
+Твоя задача — создать обогащённый промпт, который включает:
+
+1. **Роль** — определи оптимальную роль для выполнения задачи (напр. "Senior React/Next.js разработчик, специализирующийся на системах уведомлений")
+2. **Задача** — переформулируй запрос пользователя чётко и конкретно
+3. **Подзадачи** — разбей задачу на 3-7 конкретных шагов
+4. **Релевантный контекст** — выбери ТОЛЬКО релевантные части из CLAUDE.md (не копируй всё!)
+5. **Ограничения** — сформулируй технические ограничения на основе проекта
+
+Формат ответа — чистый Markdown без пояснений. Используй русский язык."""
+
+
+def enrich_prompt(
+    user_query: str,
+    claude_md_content: str,
+    timeout: int = 120,
+) -> ClaudeResult:
+    """
+    Use Claude Code CLI to enrich a user query into a structured prompt.
+
+    Sends the user query + CLAUDE.md content to Claude for intelligent
+    analysis, role detection, task decomposition, and context filtering.
+
+    Args:
+        user_query: The user's original query
+        claude_md_content: Full content of CLAUDE.md
+        timeout: Timeout in seconds
+
+    Returns:
+        ClaudeResult with the enriched prompt as output
+    """
+    if not check_claude_available():
+        return ClaudeResult(
+            success=False,
+            output="",
+            error="Claude Code CLI not found. Install from https://claude.ai/code",
+            return_code=-1,
+        )
+
+    enrichment_prompt = f"""{ENRICH_SYSTEM_PROMPT}
+
+---
+
+## Запрос пользователя
+{user_query}
+
+---
+
+## Контекст проекта (CLAUDE.md)
+{claude_md_content}
+
+---
+
+Создай обогащённый промпт:"""
+
+    return run_claude_code(enrichment_prompt, timeout=timeout, print_mode=True)

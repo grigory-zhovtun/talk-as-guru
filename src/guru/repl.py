@@ -17,8 +17,8 @@ from . import __version__
 from .parser import ClaudeMarkdownParser
 from .prompt_builder import PromptBuilder
 from .config import ConfigManager
-from .claude_integration import run_claude_code, check_claude_available
-from .utils import format_file_size
+from .claude_integration import run_claude_code, check_claude_available, enrich_prompt
+from .utils import format_file_size, ensure_directory, get_next_prompt_number
 
 
 class GuruREPL:
@@ -31,6 +31,7 @@ class GuruREPL:
     - /template   - Switch or list templates
     - /profile    - Load or list profiles
     - /run        - Send last prompt to Claude Code
+    - /smart      - Re-generate last query with AI enrichment
     - /help       - Show help
     - /exit       - Exit
     """
@@ -62,6 +63,7 @@ class GuruREPL:
         self.history: List[str] = []
         self.last_prompt_content: Optional[str] = None
         self.last_prompt_path: Optional[Path] = None
+        self.last_query: Optional[str] = None
         self.running = False
 
         # Command handlers
@@ -71,6 +73,7 @@ class GuruREPL:
             "/template": self._cmd_template,
             "/profile": self._cmd_profile,
             "/run": self._cmd_run,
+            "/smart": self._cmd_smart,
             "/help": self._cmd_help,
             "/exit": self._cmd_exit,
             "/quit": self._cmd_exit,
@@ -163,12 +166,15 @@ class GuruREPL:
         """Process a user query and generate a prompt."""
         # Add to history
         self.history.append(query)
+        self.last_query = query
         if len(self.history) > 100:  # Keep last 100 queries
             self.history = self.history[-100:]
 
-        # Build and save prompt
+        # Build and save prompt with relevant context filtering
         try:
             claude_md_data = self.parser.get_all_sections()
+            claude_md_data["relevant_context"] = self.parser.get_relevant_sections(query)
+
             content, filepath = self.builder.build_and_save(
                 query, claude_md_data, self.prompts_dir
             )
@@ -329,6 +335,51 @@ class GuruREPL:
         except Exception as e:
             self.console.print(f"[red]Error:[/red] {e}")
 
+    def _cmd_smart(self, args: str) -> None:
+        """Re-generate last query with AI enrichment via Claude Code CLI."""
+        query = args.strip() if args.strip() else self.last_query
+
+        if not query:
+            self.console.print("[yellow]No query to enrich.[/yellow] Make a query first or provide one: /smart <query>")
+            return
+
+        if not check_claude_available():
+            self.console.print("[red]Claude Code CLI not found.[/red]")
+            self.console.print("[dim]Install from: https://claude.ai/code[/dim]")
+            return
+
+        self.console.print("[blue]Smart mode: enriching prompt via Claude Code...[/blue]")
+
+        try:
+            with self.console.status("[blue]Analyzing query...[/blue]", spinner="dots"):
+                result = enrich_prompt(query, self.parser.extract_context())
+
+            if result.success and result.output:
+                # Save the enriched prompt
+                ensure_directory(self.prompts_dir)
+                number = get_next_prompt_number(self.prompts_dir)
+                filename = f"prompt_{number:02d}.md"
+                filepath = self.prompts_dir / filename
+                filepath.write_text(result.output, encoding="utf-8")
+
+                self.last_prompt_content = result.output
+                self.last_prompt_path = filepath
+                self.last_query = query
+
+                # Add to history if new query
+                if not args.strip():
+                    pass  # Already in history from original query
+                else:
+                    self.history.append(query)
+
+                self.console.print(f"[green]Saved (smart):[/green] {filepath}")
+            else:
+                self.console.print(f"[yellow]Smart mode failed:[/yellow] {result.error}")
+                self.console.print("[dim]Use regular query instead.[/dim]")
+
+        except Exception as e:
+            self.console.print(f"[red]Error:[/red] {e}")
+
     def _cmd_help(self, args: str) -> None:
         """Show help information."""
         help_text = """
@@ -338,11 +389,14 @@ class GuruREPL:
   [cyan]/template[/cyan] [name] Switch template (no arg = list)
   [cyan]/profile[/cyan] [name]  Load profile (no arg = list)
   [cyan]/run[/cyan]             Send last prompt to Claude Code
+  [cyan]/smart[/cyan] [query]   Enrich prompt via Claude Code AI
   [cyan]/help[/cyan]            Show this help
   [cyan]/exit[/cyan]            Exit Guru
 
 [bold]Usage:[/bold]
   Type any query to generate a structured prompt.
+  Use [cyan]/smart[/cyan] after a query to re-generate it with AI analysis.
+  Use [cyan]--smart[/cyan] flag in CLI mode: [dim]guru --smart "your query"[/dim]
   Prompts are saved to ./prompts/ with auto-incrementing names.
 """
         self.console.print(Panel(help_text.strip(), title="Guru Help", border_style="cyan"))
