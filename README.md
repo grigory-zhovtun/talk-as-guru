@@ -2,7 +2,7 @@
 
 CLI utility for analyzing CLAUDE.md files and generating structured prompts for Claude Code.
 
-Guru reads your project's CLAUDE.md file and uses it to generate context-aware prompts that include your tech stack, coding conventions, and project constraints.
+Guru reads your project's CLAUDE.md file and uses it to generate context-aware prompts that include role detection, relevant context filtering, tech stack, coding conventions, and project constraints.
 
 ## Installation
 
@@ -39,15 +39,61 @@ pip install -e .
 2. Run Guru:
 
 ```bash
-guru
+guru "create a REST API endpoint for user authentication"
 ```
 
-3. Enter your query:
+3. Result — a structured prompt in `./prompts/prompt_01.md`:
 
+```markdown
+# Роль
+Senior Backend разработчик (FastAPI, Python, PostgreSQL)
+
+# Задача
+create a REST API endpoint for user authentication
+
+# Техническое окружение
+- Python 3.11
+- FastAPI
+- PostgreSQL
+
+# Релевантный контекст
+[Only relevant sections from CLAUDE.md]
+
+# Конвенции
+- Use type hints everywhere
+- Follow PEP 8 style guide
+
+# Ограничения и правила
+- Never commit secrets
+- Always write tests for new features
 ```
-guru> create a REST API endpoint for user authentication
-Saved: ./prompts/prompt_01.md
+
+## Two Modes
+
+### Standard Mode (default)
+
+Generates a prompt locally using a template with:
+- **Automatic role detection** — determines the role from query keywords and tech stack (e.g. "Senior Frontend разработчик (Next.js, React, TypeScript)")
+- **Relevant context filtering** — includes only project-specific sections from CLAUDE.md, sorted by relevance to the query
+- **Structured output** — role, task, tech environment, context, conventions, constraints
+
+```bash
+guru "add a notification bell to the header"
 ```
+
+### Smart Mode (`--smart`)
+
+Uses Claude Code CLI to analyze the query and generate an enriched prompt with:
+- **AI-powered role selection** — specific specialization for the task
+- **Task decomposition** — 3-7 concrete subtasks with details
+- **Intelligent context filtering** — only the most relevant parts of CLAUDE.md
+- **Technical constraints** — derived from project architecture
+
+```bash
+guru --smart "add a notification bell to the header"
+```
+
+Requires Claude Code CLI installed (`claude` command in PATH).
 
 ## Usage
 
@@ -72,6 +118,7 @@ guru "create a function for email validation"
 ```
 guru --help                    Show help
 guru --version                 Show version
+guru --smart / -s              Enrich prompt via Claude Code AI
 guru -c /path/to/CLAUDE.md     Use specific CLAUDE.md file
 guru -p ./my-prompts           Save prompts to custom directory
 guru -t custom                 Use a custom template
@@ -87,6 +134,7 @@ guru --profile my-project      Load a saved profile
 | `/template [name]` | Switch template (no arg = list available) |
 | `/profile [name]` | Load profile (no arg = list available) |
 | `/run` | Send last prompt to Claude Code CLI |
+| `/smart [query]` | Enrich prompt via Claude Code AI |
 | `/help` | Show help |
 | `/exit` | Exit Guru |
 
@@ -102,15 +150,28 @@ prompts/
 ```
 
 Each prompt includes:
+- Automatically detected role
 - Your query/task
 - Tech stack from CLAUDE.md
+- Relevant project context (filtered, not full dump)
 - Project conventions
 - Constraints and rules
-- Full project context
 
 ## Templates
 
 Guru uses Jinja2 templates for prompt generation.
+
+### Available Template Variables
+
+| Variable | Description |
+|----------|-------------|
+| `user_query` | The user's query/task |
+| `role` | Auto-detected role |
+| `tech_stack` | Tech stack section |
+| `relevant_context` | Filtered relevant sections |
+| `conventions` | Conventions section |
+| `constraints` | Constraints/rules section |
+| `context` | Full file content (legacy) |
 
 ### Custom Templates
 
@@ -123,6 +184,9 @@ mkdir -p ~/.guru/templates
 Example template (`~/.guru/templates/detailed.md.j2`):
 
 ```jinja2
+# Role
+{{ role }}
+
 # Task Description
 {{ user_query }}
 
@@ -130,14 +194,14 @@ Example template (`~/.guru/templates/detailed.md.j2`):
 ### Tech Stack
 {{ tech_stack }}
 
+### Relevant Context
+{{ relevant_context }}
+
 ### Coding Standards
 {{ conventions }}
 
 ### Important Rules
 {{ constraints }}
-
-## Full Project Context
-{{ context }}
 ```
 
 Use it with:
@@ -170,7 +234,9 @@ guru> /profile my-project
 
 ## Claude Code Integration
 
-The `/run` command sends your last prompt to Claude Code CLI:
+### `/run` — Execute prompt
+
+Send the last generated prompt to Claude Code CLI:
 
 ```
 guru> create a user model
@@ -179,6 +245,25 @@ Saved: ./prompts/prompt_01.md
 guru> /run
 Sending to Claude Code...
 [Claude's response appears here]
+```
+
+### `/smart` — AI-enriched prompts
+
+Re-generate the last query with AI analysis:
+
+```
+guru> add notifications to the header
+Saved: ./prompts/prompt_01.md
+
+guru> /smart
+Smart mode: enriching prompt via Claude Code...
+Saved (smart): ./prompts/prompt_02.md
+```
+
+Or provide a new query directly:
+
+```
+guru> /smart add API endpoint for notifications
 ```
 
 Requirements:
@@ -195,6 +280,8 @@ Guru recognizes sections based on keywords in headings:
 | Conventions | convention, style, formatting, patterns, practices |
 | Constraints | constraint, rule, restriction, important, warning |
 
+All other sections are treated as project context and included based on relevance to the query.
+
 Supported heading formats:
 
 ```markdown
@@ -203,7 +290,21 @@ Supported heading formats:
 **Heading**
 ```
 
-If no sections are recognized, the entire file is used as context.
+## Role Detection
+
+Guru automatically detects the appropriate role based on query keywords and tech stack:
+
+| Keywords | Role |
+|----------|------|
+| react, next.js, frontend, css, ui, компонент | Senior Frontend разработчик |
+| python, fastapi, backend, api, endpoint | Senior Backend разработчик |
+| sql, postgres, database, модел | Senior Database разработчик |
+| docker, kubernetes, deploy, devops | Senior DevOps инженер |
+| test, pytest, jest, e2e | Senior QA инженер |
+| security, auth, jwt, oauth | Senior Security инженер |
+| go, golang, goroutine | Senior Go разработчик |
+
+The role is enhanced with specific technologies from the project's tech stack (e.g. "Senior Frontend разработчик (Next.js, React, TypeScript)").
 
 ## Examples
 
@@ -213,32 +314,32 @@ If no sections are recognized, the entire file is used as context.
 # Navigate to your project
 cd my-project
 
-# Ensure CLAUDE.md exists
-cat CLAUDE.md
+# Generate a prompt
+guru "implement user authentication with JWT"
+# Saved: ./prompts/prompt_01.md
 
-# Start Guru
+# Generate an AI-enriched prompt
+guru --smart "add rate limiting to the API"
+# Saved (smart): ./prompts/prompt_02.md
+```
+
+### REPL Workflow
+
+```bash
 guru
 
-# Generate prompts
 guru> implement user authentication with JWT
 Saved: ./prompts/prompt_01.md
 
-guru> add rate limiting to the API
-Saved: ./prompts/prompt_02.md
+guru> /smart
+Smart mode: enriching prompt via Claude Code...
+Saved (smart): ./prompts/prompt_02.md
 
-# Review history
+guru> /run
+Sending to Claude Code...
+
 guru> /history
-
-# Exit
 guru> /exit
-```
-
-### Using with Claude Code
-
-```bash
-guru "refactor the database module"
-# Opens ./prompts/prompt_01.md
-# Copy content to Claude Code or use /run command
 ```
 
 ## Configuration Directory
