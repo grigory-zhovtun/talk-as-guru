@@ -11,7 +11,7 @@ Guru reads your project's CLAUDE.md file and uses it to generate context-aware p
 pip install talk-as-guru
 
 # From source
-git clone https://github.com/grigoriizhovtun/talk-as-guru.git
+git clone https://github.com/grigory-zhovtun/talk-as-guru.git
 cd talk-as-guru
 pip install -e .
 ```
