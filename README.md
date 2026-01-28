@@ -109,11 +109,21 @@ Use `--no-smart` to generate prompts using local templates only (no Claude Code 
 guru --no-smart "create a function for email validation"
 ```
 
+### Read Query from File
+
+Use `--file / -f` to read query content from a file (useful for multi-line specs with special characters):
+
+```bash
+guru -f spec.md                    # Read query from file
+guru -f spec.md "additional context"  # File content + extra text
+```
+
 ### Command Line Options
 
 ```
 guru --help                    Show help
 guru --version                 Show version
+guru --file / -f <path>        Read query from file
 guru --no-smart / -S           Use local template instead of Claude Code AI
 guru -c /path/to/CLAUDE.md     Use specific CLAUDE.md file
 guru -p ./my-prompts           Save prompts to custom directory
@@ -130,6 +140,7 @@ guru --profile my-project      Load a saved profile
 | `/template [name]` | Switch template (no arg = list available) |
 | `/profile [name]` | Load profile (no arg = list available) |
 | `/run` | Send last prompt to Claude Code CLI |
+| `/file <path>` | Read query from file and process it |
 | `/help` | Show help |
 | `/exit` | Exit Guru |
 
