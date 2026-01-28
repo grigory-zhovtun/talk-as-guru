@@ -67,6 +67,12 @@ def main(
         "--profile",
         help="Load a saved profile.",
     ),
+    file: Optional[Path] = typer.Option(
+        None,
+        "--file",
+        "-f",
+        help="Read query/spec from file (useful for multi-line content).",
+    ),
     smart: bool = typer.Option(
         True,
         "--smart/--no-smart",
@@ -142,6 +148,24 @@ def main(
         prompts_dir = Path.cwd() / "prompts"
     elif not prompts_dir.is_absolute():
         prompts_dir = Path.cwd() / prompts_dir
+
+    # Handle file input
+    if file:
+        file_path = file if file.is_absolute() else Path.cwd() / file
+        if not file_path.exists():
+            console.print(f"[red]Error:[/red] File not found: {file_path}")
+            raise typer.Exit(1)
+        try:
+            file_content = file_path.read_text(encoding="utf-8")
+        except Exception as e:
+            console.print(f"[red]Error reading file:[/red] {e}")
+            raise typer.Exit(1)
+
+        # Combine file content with query if both provided
+        if query:
+            query = f"{query}\n\n{file_content}"
+        else:
+            query = file_content
 
     # Single query mode
     if query:

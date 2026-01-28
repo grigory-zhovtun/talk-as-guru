@@ -74,6 +74,7 @@ class GuruREPL:
             "/profile": self._cmd_profile,
             "/run": self._cmd_run,
             "/smart": self._cmd_smart,
+            "/file": self._cmd_file,
             "/help": self._cmd_help,
             "/exit": self._cmd_exit,
             "/quit": self._cmd_exit,
@@ -406,6 +407,30 @@ class GuruREPL:
         except Exception as e:
             self.console.print(f"[red]Error:[/red] {e}")
 
+    def _cmd_file(self, args: str) -> None:
+        """Read query from file and process it."""
+        if not args.strip():
+            self.console.print("[yellow]Usage:[/yellow] /file <path>")
+            self.console.print("[dim]Reads content from file and processes it as a query.[/dim]")
+            return
+
+        file_path = Path(args.strip())
+        if not file_path.is_absolute():
+            file_path = Path.cwd() / file_path
+
+        if not file_path.exists():
+            self.console.print(f"[red]File not found:[/red] {file_path}")
+            return
+
+        try:
+            content = file_path.read_text(encoding="utf-8")
+        except Exception as e:
+            self.console.print(f"[red]Error reading file:[/red] {e}")
+            return
+
+        self.console.print(f"[dim]Read {len(content)} chars from {file_path.name}[/dim]")
+        self._process_query(content)
+
     def _cmd_help(self, args: str) -> None:
         """Show help information."""
         help_text = """
@@ -416,6 +441,7 @@ class GuruREPL:
   [cyan]/profile[/cyan] [name]  Load profile (no arg = list)
   [cyan]/run[/cyan]             Send last prompt to Claude Code
   [cyan]/smart[/cyan] [query]   Enrich prompt via Claude Code AI
+  [cyan]/file[/cyan] <path>     Read query from file
   [cyan]/help[/cyan]            Show this help
   [cyan]/exit[/cyan]            Exit Guru
 
